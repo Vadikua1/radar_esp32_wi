@@ -19,7 +19,6 @@ extern void start_webserver(void);
 extern void start_dns_server(void);
 
 // задача-імітатор
-// Твоя задача-імітатор (Підлаштована під швидкість реального мотора)
 void radar_mock_task(void *pvParameters) {
     float angle = 0.0; 
     
@@ -33,13 +32,11 @@ void radar_mock_task(void *pvParameters) {
             angle -= 360.0;
         }
 
-        // Рандомна генерація цілей
         int dist = 0;
         if (rand() % 10 == 0) { 
             dist = 50 + (rand() % 150); 
         }
 
-        // Перетворюємо float назад у int для відправки
         send_radar_data((int)angle, dist);
         
         vTaskDelay(pdMS_TO_TICKS(50)); 

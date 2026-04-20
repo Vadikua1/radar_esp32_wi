@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <title>Wadzik Radar</title>
+    <style>
+        body { 
+            margin: 0; 
+            background: #111; 
+            color: #0f0; 
+            min-height: 100vh; 
+            display: flex; 
+            flex-direction: column; 
+            justify-content: center; 
+            align-items: center; 
+            font-family: monospace; 
+        }
+
+        h1 {
+            margin-top: 0;
+            margin-bottom: 20px;
+            font-size: 2.5rem;
+            letter-spacing: 5px;
+            text-shadow: 0 0 15px rgba(0, 255, 0, 0.8); 
+            text-align: center; 
+            max-width: 90%; 
+        }
+
+        canvas { 
+            border: 2px solid #0f0; 
+            border-radius: 50%; 
+            background: #000; 
+            box-shadow: 0 0 40px rgba(0, 255, 0, 0.4); 
+        }
+    </style>
+</head>
+<body>
+
+    <h1>ULTRABLYA HYPERCOOL HOG RIDER FUCK MY MOUTH RADAR SYSTEM</h1>
+    
+    <canvas id="radar" width="600" height="600"></canvas>
+
+    <script>
+        const canvas = document.getElementById('radar');
+        const ctx = canvas.getContext('2d');
+        const cx = 300, cy = 300, radius = 280;
+
+        let targets = []; 
+        
+        // Змінні для згладжування на 60 FPS
+        let visualAngleRad = -Math.PI / 2; // Те, що ми зараз малюємо
+        let targetAngleRad = -Math.PI / 2; // Те, що прислав сервер
+        let lastTime = performance.now();
+
+        function drawGrid() {
+            ctx.strokeStyle = 'rgba(0, 255, 0, 0.2)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            for(let r=50; r<=radius; r+=50) ctx.arc(cx, cy, r, 0, Math.PI*2);
+            
+            ctx.moveTo(cx, cy - radius);
+            ctx.lineTo(cx, cy + radius);
+            ctx.moveTo(cx - radius, cy);
+            ctx.lineTo(cx + radius, cy);
+            ctx.stroke();
+        }
+
+        function drawScannerLine(angleRad) {
+            const lineLength = radius + 12;
+            const x = cx + lineLength * Math.cos(angleRad);
+            const y = cy + lineLength * Math.sin(angleRad);
+
+            ctx.lineWidth = 3;
+            ctx.strokeStyle = '#0f0';
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.lineTo(x, y);
+            ctx.stroke();
+        }
+
+        function drawSmoothSweep(angleRad) {
+            const tailLength = Math.PI * 0.85; 
+            let startAngle = angleRad - tailLength;
+
+            const gradient = ctx.createConicGradient(startAngle, cx, cy);
+            const tailStop = tailLength / (Math.PI * 2);
+            
+            gradient.addColorStop(0, 'rgba(0, 255, 0, 0)'); 
+            gradient.addColorStop(tailStop, 'rgba(0, 255, 0, 0.3)'); 
+            gradient.addColorStop(tailStop + 0.001, 'rgba(0, 255, 0, 0)'); 
+            gradient.addColorStop(1, 'rgba(0, 255, 0, 0)');
+
+            ctx.fillStyle = gradient;
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.arc(cx, cy, radius, startAngle, angleRad);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        // --- ГОЛОВНИЙ ГРАФІЧНИЙ ЦИКЛ (60+ FPS) ---
+        function render(time) {
+            requestAnimationFrame(render); // Зациклюємо виклик
+            
+            // Вираховуємо час між кадрами для рівномірного згасання
+            const dt = (time - lastTime) / 1000; 
+            lastTime = time;
+
+            // Згладжуємо кут (гумова прив'язка до даних сервера)
+            let diff = targetAngleRad - visualAngleRad;
+            // Виправляємо стрибок при переході через 360 градусів
+            while (diff < -Math.PI) diff += Math.PI * 2;
+            while (diff > Math.PI) diff -= Math.PI * 2;
+            
+            // М'яко наздоганяємо сервер (0.3 = швидкість згладжування)
+            visualAngleRad += diff * 0.3; 
+
+            ctx.clearRect(0, 0, 600, 600);
+
+            drawGrid();
+            drawSmoothSweep(visualAngleRad);
+            drawScannerLine(visualAngleRad);
+
+            // Малюємо цілі
+            for (let i = targets.length - 1; i >= 0; i--) {
+                let t = targets[i];
+                
+                // 1. Широке слабке світіння
+                ctx.shadowBlur = 40;
+                ctx.shadowColor = `rgba(255, 0, 0, ${t.alpha})`;
+                ctx.fillStyle = `rgba(200, 0, 0, ${t.alpha * 0.5})`;
+                ctx.beginPath();
+                ctx.arc(t.x, t.y, 10, 0, Math.PI*2);
+                ctx.fill();
+
+                // 2. Яскраво червона база
+                ctx.shadowBlur = 20;
+                ctx.fillStyle = `rgba(255, 20, 20, ${t.alpha})`;
+                ctx.beginPath();
+                ctx.arc(t.x, t.y, 6, 0, Math.PI*2);
+                ctx.fill();
+
+                // 3. Гаряче біле ядро
+                ctx.shadowBlur = 0;
+                ctx.fillStyle = `rgba(255, 255, 255, ${t.alpha})`;
+                ctx.beginPath();
+                ctx.arc(t.x, t.y, 2, 0, Math.PI*2);
+                ctx.fill();
+                
+                // Плавно гасимо ціль (зникне за ~2 секунди)
+                t.alpha -= 0.5 * dt; 
+                if (t.alpha <= 0) {
+                    targets.splice(i, 1);
+                }
+            }
+        }
+
+        // Запускаємо графічний цикл
+        requestAnimationFrame(render);
+
+        // --- ОБРОБНИК ДАНИХ ВІД ESP32 (20 FPS) ---
+        const ws = new WebSocket(`ws://${location.host}/ws`);
+        
+        ws.onmessage = (event) => {
+            const data = JSON.parse(event.data); 
+            // Тільки оновлюємо цільовий кут, графіка дотягнеться сама
+            targetAngleRad = (data.a - 90) * Math.PI / 180;
+            const dist = data.d;
+
+            // Якщо є ціль, фіксуємо її
+            if (dist > 0 && dist < radius) {
+                // Використовуємо targetAngleRad, щоб точка була ідеально точною
+                const tx = cx + dist * Math.cos(targetAngleRad);
+                const ty = cy + dist * Math.sin(targetAngleRad);
+                targets.push({ x: tx, y: ty, alpha: 1.0 });
+            }
+        };
+    </script>
+</body>
+</html>

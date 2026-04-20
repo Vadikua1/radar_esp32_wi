@@ -2,7 +2,7 @@
 <html lang="uk">
 <head>
     <meta charset="UTF-8">
-    <title>Wadzik Radar</title>
+    <title>Radar</title>
     <style>
         body { 
             margin: 0; 
@@ -36,7 +36,7 @@
 </head>
 <body>
 
-    <h1>ULTRABLYA HYPERCOOL HOG RIDER FUCK MY MOUTH RADAR SYSTEM</h1>
+    <h1>WI RADAR SYSTEM</h1>
     
     <canvas id="radar" width="600" height="600"></canvas>
 
@@ -46,10 +46,8 @@
         const cx = 300, cy = 300, radius = 280;
 
         let targets = []; 
-        
-        // Змінні для згладжування на 60 FPS
-        let visualAngleRad = -Math.PI / 2; // Те, що ми зараз малюємо
-        let targetAngleRad = -Math.PI / 2; // Те, що прислав сервер
+        let visualAngleRad = -Math.PI / 2;
+        let targetAngleRad = -Math.PI / 2;
         let lastTime = performance.now();
 
         function drawGrid() {
@@ -98,21 +96,13 @@
             ctx.fill();
         }
 
-        // --- ГОЛОВНИЙ ГРАФІЧНИЙ ЦИКЛ (60+ FPS) ---
         function render(time) {
-            requestAnimationFrame(render); // Зациклюємо виклик
-            
-            // Вираховуємо час між кадрами для рівномірного згасання
+            requestAnimationFrame(render);
             const dt = (time - lastTime) / 1000; 
             lastTime = time;
-
-            // Згладжуємо кут (гумова прив'язка до даних сервера)
             let diff = targetAngleRad - visualAngleRad;
-            // Виправляємо стрибок при переході через 360 градусів
             while (diff < -Math.PI) diff += Math.PI * 2;
             while (diff > Math.PI) diff -= Math.PI * 2;
-            
-            // М'яко наздоганяємо сервер (0.3 = швидкість згладжування)
             visualAngleRad += diff * 0.3; 
 
             ctx.clearRect(0, 0, 600, 600);
@@ -147,7 +137,7 @@
                 ctx.arc(t.x, t.y, 2, 0, Math.PI*2);
                 ctx.fill();
                 
-                // Плавно гасимо ціль (зникне за ~2 секунди)
+
                 t.alpha -= 0.5 * dt; 
                 if (t.alpha <= 0) {
                     targets.splice(i, 1);
@@ -155,21 +145,19 @@
             }
         }
 
-        // Запускаємо графічний цикл
         requestAnimationFrame(render);
 
-        // --- ОБРОБНИК ДАНИХ ВІД ESP32 (20 FPS) ---
+
         const ws = new WebSocket(`ws://${location.host}/ws`);
         
         ws.onmessage = (event) => {
             const data = JSON.parse(event.data); 
-            // Тільки оновлюємо цільовий кут, графіка дотягнеться сама
+
             targetAngleRad = (data.a - 90) * Math.PI / 180;
             const dist = data.d;
 
-            // Якщо є ціль, фіксуємо її
             if (dist > 0 && dist < radius) {
-                // Використовуємо targetAngleRad, щоб точка була ідеально точною
+
                 const tx = cx + dist * Math.cos(targetAngleRad);
                 const ty = cy + dist * Math.sin(targetAngleRad);
                 targets.push({ x: tx, y: ty, alpha: 1.0 });

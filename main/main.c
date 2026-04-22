@@ -51,7 +51,7 @@ void app_main(void) {
     }
     ESP_ERROR_CHECK(ret);
 
-    printf("Вздрочнув Radar System...\n");
+    printf("Starting Radar System...\n");
     wifi_init_softap();
     start_mdns_service();
     start_webserver();

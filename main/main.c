@@ -49,40 +49,21 @@ uint32_t calculateDistance(void);
 
 void engine_init(void);
 
-void radar_data_receiver_task(void *pvParameters) {    
-	int angle = 0;
-	int dist = 0;
-    while(1) {
-		xQueueReceive(angle_queue, &angle, portMAX_DELAY);
-		xQueueReceive(distance_queue, &dist, portMAX_DELAY);
-        send_radar_data(angle, dist);
-        vTaskDelay(pdMS_TO_TICKS(10)); 
-    }
-}
-
-void engine_work_task(void *pvParameters) {
+void hc_sr04_data_receiver_task(void *pvParameters) {
+	int distance = 0;
 	float angle = 0.0;
-	// Швидкість: 60 град / 0.17 сек = 352.94 град/сек
-    // Крок за один такт (50мс): 352.94 / 20 = ~17.65
 	const float angle_step = 8.823; 
 	engine_init();
-	
+
+
 	while(1) {
+		distance = calculateDistance();
 		angle += angle_step;
         if (angle >= 360.0) {
             angle = 0.0;
         }
         int angle_to_send = angle;
-        xQueueSend(angle_queue, &angle_to_send,  10);
-        vTaskDelay(pdMS_TO_TICKS(10)); 
-	}
-}
-
-void hc_sr04_data_receiver_task(void *pvParameters) {
-	int distance = 0;
-	while(1) {
-		distance = calculateDistance();
-		xQueueSend(distance_queue, &distance,  10);
+		send_radar_data(angle, distance);
 		vTaskDelay(pdMS_TO_TICKS(60)); 
 	}
 }
@@ -105,13 +86,10 @@ void app_main(void)
     }
     ESP_ERROR_CHECK(ret);
 
-    printf("Starting Radar System...\n");
     wifi_init_softap();
     start_mdns_service();
     start_webserver();
     xTaskCreate(hc_sr04_data_receiver_task, "hc_sr04_data_receiver_task", 4096, NULL, 5, NULL);
-    xTaskCreate(engine_work_task, "engine_work_task", 4096, NULL, 5, NULL);
-    xTaskCreate(radar_data_receiver_task, "radar_data_receiver", 4096, NULL, 5, NULL);
     printf("System Ready! Connect to 'Radar' and go to http://ultracoolradar.local\n");
 
 }

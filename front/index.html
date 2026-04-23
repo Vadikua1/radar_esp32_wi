@@ -53,8 +53,19 @@
         function drawGrid() {
             ctx.strokeStyle = 'rgba(0, 255, 0, 0.2)';
             ctx.lineWidth = 1;
+            ctx.fillStyle = 'rgba(0, 255, 0, 0.5)';
+            ctx.font = '12px monospace';
+            ctx.textAlign = 'center';
+
             ctx.beginPath();
-            for(let r=50; r<=radius; r+=50) ctx.arc(cx, cy, r, 0, Math.PI*2);
+            
+
+            for(let r=50; r<=radius; r+=50) {
+                ctx.arc(cx, cy, r, 0, Math.PI*2);
+                
+                let cmValue = Math.round((r / radius) * 300); 
+                ctx.fillText(cmValue + 'cm', cx, cy - r - 5);
+            }
             
             ctx.moveTo(cx, cy - radius);
             ctx.lineTo(cx, cy + radius);
@@ -111,11 +122,10 @@
             drawSmoothSweep(visualAngleRad);
             drawScannerLine(visualAngleRad);
 
-            // Малюємо цілі
+         
             for (let i = targets.length - 1; i >= 0; i--) {
                 let t = targets[i];
                 
-                // 1. Широке слабке світіння
                 ctx.shadowBlur = 40;
                 ctx.shadowColor = `rgba(255, 0, 0, ${t.alpha})`;
                 ctx.fillStyle = `rgba(200, 0, 0, ${t.alpha * 0.5})`;
@@ -123,21 +133,18 @@
                 ctx.arc(t.x, t.y, 10, 0, Math.PI*2);
                 ctx.fill();
 
-                // 2. Яскраво червона база
                 ctx.shadowBlur = 20;
                 ctx.fillStyle = `rgba(255, 20, 20, ${t.alpha})`;
                 ctx.beginPath();
                 ctx.arc(t.x, t.y, 6, 0, Math.PI*2);
                 ctx.fill();
 
-                // 3. Гаряче біле ядро
                 ctx.shadowBlur = 0;
                 ctx.fillStyle = `rgba(255, 255, 255, ${t.alpha})`;
                 ctx.beginPath();
                 ctx.arc(t.x, t.y, 2, 0, Math.PI*2);
                 ctx.fill();
                 
-
                 t.alpha -= 0.5 * dt; 
                 if (t.alpha <= 0) {
                     targets.splice(i, 1);
@@ -147,19 +154,25 @@
 
         requestAnimationFrame(render);
 
-
         const ws = new WebSocket(`ws://${location.host}/ws`);
-        
+
+        const MAX_DISTANCE_CM = 300; 
+
         ws.onmessage = (event) => {
             const data = JSON.parse(event.data); 
 
             targetAngleRad = (data.a - 90) * Math.PI / 180;
             const dist = data.d;
 
-            if (dist > 0 && dist < radius) {
+            if (dist > 3 && dist <= MAX_DISTANCE_CM) {
+                
+            
+                const pixelDist = (dist / MAX_DISTANCE_CM) * radius;
 
-                const tx = cx + dist * Math.cos(targetAngleRad);
-                const ty = cy + dist * Math.sin(targetAngleRad);
+                
+                const tx = cx + pixelDist * Math.cos(targetAngleRad);
+                const ty = cy + pixelDist * Math.sin(targetAngleRad);
+                
                 targets.push({ x: tx, y: ty, alpha: 1.0 });
             }
         };

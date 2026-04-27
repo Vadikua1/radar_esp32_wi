@@ -159,9 +159,9 @@
         const MAX_DISTANCE_CM = 300; 
 
         ws.onmessage = (event) => {
-            const data = JSON.parse(event.data); 
-
-            targetAngleRad = (data.a - 90) * Math.PI / 180;
+            try {
+        let data = JSON.parse(event.data);
+         targetAngleRad = (data.a - 90) * Math.PI / 180;
             const dist = data.d;
 
             if (dist > 3 && dist <= MAX_DISTANCE_CM) {
@@ -175,6 +175,9 @@
                 
                 targets.push({ x: tx, y: ty, alpha: 1.0 });
             }
+    } catch (e) {
+        console.warn("Битий пакет, ігноруємо:", event.data);
+    } 
         };
     </script>
 </body>

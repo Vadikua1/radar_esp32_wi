@@ -14,15 +14,18 @@ httpd_handle_t server = NULL;
 void send_radar_data(int angle, int distance) {
     if (server == NULL) return;
 
-    char json_string[64];
-    snprintf(json_string, sizeof(json_string), "{\"a\":%d,\"d\":%d}", angle, distance);
+    static char json_buffers[50][64];
+    static uint8_t buf_idx = 0;
+
+    buf_idx = (buf_idx + 1) % 10; 
+    
+    snprintf(json_buffers[buf_idx], 64, "{\"a\":%d,\"d\":%d}", angle, distance);
 
     httpd_ws_frame_t ws_pkt;
     memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
-    ws_pkt.payload = (uint8_t *)json_string;
-    ws_pkt.len = strlen(json_string);
+    ws_pkt.payload = (uint8_t *)json_buffers[buf_idx]; 
+    ws_pkt.len = strlen(json_buffers[buf_idx]);
     ws_pkt.type = HTTPD_WS_TYPE_TEXT;
-
 
     size_t clients = 10;
     int client_fds[10];
@@ -83,7 +86,7 @@ void dns_server_task(void *pvParameters) {
     int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
     bind(sock, (struct sockaddr *)&server_addr, sizeof(server_addr));
 
-    char rx_buffer[128];
+    char rx_buffer[512];
     while (1) {
         struct sockaddr_in source_addr;
         socklen_t socklen = sizeof(source_addr);
@@ -126,6 +129,7 @@ void wifi_init_softap(void) {
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_config));
     ESP_ERROR_CHECK(esp_wifi_start());
+    esp_wifi_set_ps(WIFI_PS_NONE);
     
     printf("Wi-Fi AP started. SSID: Radar, Password: 12345678\n");
 }

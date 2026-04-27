@@ -36,8 +36,12 @@ extern void start_mdns_service(void);
 extern void start_webserver(void);
 extern void start_dns_server(void);
 
-static QueueHandle_t angle_queue = NULL;
-static QueueHandle_t distance_queue = NULL;
+static QueueHandle_t data_queue = NULL;
+
+struct dto_struct {
+			int angle;
+			int dist; 
+		};
 
 enum {
 	PIN_18 = 18,
@@ -52,27 +56,51 @@ void engine_init(void);
 void hc_sr04_data_receiver_task(void *pvParameters) {
 	int distance = 0;
 	float angle = 0.0;
-	const float angle_step = 8.823; 
+	const float speed_deg_per_sec = 84.709f;	
 	engine_init();
-
+	struct dto_struct data;
+	
+	uint64_t last_time = esp_timer_get_time();
 
 	while(1) {
 		distance = calculateDistance();
-		angle += angle_step;
-        if (angle >= 360.0) {
-            angle = 0.0;
+		uint64_t current_time = esp_timer_get_time();
+		float dt = (float)(current_time - last_time) / 1000000.0f;
+		last_time = current_time;
+		angle += speed_deg_per_sec * dt;;
+        if (angle >= 360.0f) {
+            angle -= 360.0f;
         }
-        int angle_to_send = angle;
-		send_radar_data(angle, distance);
-		vTaskDelay(pdMS_TO_TICKS(60)); 
+
+		data.angle = (int)angle;
+		data.dist = distance;
+		xQueueSend(data_queue, &data,  10);
+		vTaskDelay(pdMS_TO_TICKS(65)); 
 	}
+}
+
+void data_sender_task(void *pvParameters) {
+	struct dto_struct data;
+	
+	while (1) {
+        UBaseType_t waiting_msgs = uxQueueMessagesWaiting(data_queue);
+        
+        if (waiting_msgs > 15) {
+            xQueueReset(data_queue); 
+            continue; 
+        }
+
+        if (xQueueReceive(data_queue, &data, portMAX_DELAY) == pdPASS) {
+            send_radar_data(data.angle, data.dist);
+            vTaskDelay(1); 
+        }
+    }
 }
 
 
 void app_main(void)
 {	    
-	angle_queue = xQueueCreate(20, sizeof(int));
-	distance_queue = xQueueCreate(20, sizeof(int));
+	data_queue = xQueueCreate(45, sizeof(struct dto_struct));
 	// gpio
 	gpio_reset_pin(T_PIN);
 	gpio_reset_pin(E_PIN);
@@ -85,12 +113,14 @@ void app_main(void)
       ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK(ret);
-
     wifi_init_softap();
     start_mdns_service();
     start_webserver();
-    xTaskCreate(hc_sr04_data_receiver_task, "hc_sr04_data_receiver_task", 4096, NULL, 5, NULL);
     printf("System Ready! Connect to 'Radar' and go to http://ultracoolradar.local\n");
+
+
+    xTaskCreate(hc_sr04_data_receiver_task, "hc_sr04_data_receiver_task", 4096, NULL, 5, NULL);
+	xTaskCreate(data_sender_task, "data_sender_task", 4096, NULL, 5, NULL);
 
 }
 
@@ -109,7 +139,7 @@ void engine_init(void) {
 		.speed_mode = LEDC_MODE,
 		.channel = LEDC_CHANNEL,
 		.timer_sel = LEDC_TIMER_0,
-		.duty = 1024,
+		.duty = 1433,
 		.hpoint = 0
 	};
 	ledc_channel_config(&ledc_channel);
@@ -119,19 +149,28 @@ uint32_t calculateDistance(void) {
 	gpio_set_level(T_PIN, 1);
 	esp_rom_delay_us(10);
 	gpio_set_level(T_PIN, 0);
+	
 	uint64_t startTime = 0;
 	uint64_t endTime = 0;
 	uint32_t distance = 0;
+	int timeout = 0;
 	
 	while (gpio_get_level(E_PIN) == 0) {
+		timeout++;
+		esp_rom_delay_us(1);
+		if (timeout > 30000) return 0;
 	}
 	startTime = esp_timer_get_time();
 
+	timeout = 0; 
+
 	while (gpio_get_level(E_PIN) == 1) {
+		timeout++;
+		esp_rom_delay_us(1);
+		if (timeout > 30000) return 0;
 	}
 	endTime = esp_timer_get_time();
 	
 	distance = (endTime - startTime) / 58;
 	return distance;
-	
 }
